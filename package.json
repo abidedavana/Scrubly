@@ -1,0 +1,23 @@
+{
+  "name": "scrubly",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Free, open-source file tools that run 100% in your browser. Nothing is ever uploaded.",
+  "homepage": "https://abidedavana.github.io/Scrubly/",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "preact": "^10.29.3"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.5",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.0"
+  }
+}

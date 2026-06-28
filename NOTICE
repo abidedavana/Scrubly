@@ -1,0 +1,14 @@
+Scrubly
+Copyright (c) 2026 abidedavana
+Licensed under the MIT License (see LICENSE).
+
+This product bundles third-party open-source software. Each component remains
+under its own license. As libraries are added in later phases (HEIC decoding,
+image codecs, PDF and metadata tooling), they will be listed here with their
+licenses and versions.
+
+Current dependencies
+--------------------
+- Preact (MIT) — https://github.com/preactjs/preact
+- Vite (MIT) — https://github.com/vitejs/vite
+- @preact/preset-vite (MIT) — https://github.com/preactjs/preset-vite
