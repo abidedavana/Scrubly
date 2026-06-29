@@ -256,3 +256,216 @@ main.container {
   padding-bottom: 16px;
   flex-wrap: wrap;
 }
+
+/* ---- Functional dropzone ---- */
+.dz {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: 40px 24px;
+  text-align: center;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.dz:hover,
+.dz:focus-visible {
+  border-color: var(--brand);
+}
+.dz--over {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 7%, var(--surface));
+}
+.dz__title {
+  margin: 0 0 4px;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+.dz__hint {
+  margin: 0 auto;
+  max-width: 460px;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+.dz__or {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* ---- File bar ---- */
+.filebar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+}
+
+/* ---- Options ---- */
+.options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+  padding: 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.field select,
+.field input[type='number'] {
+  font: inherit;
+  font-weight: 500;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+.field input[type='range'] {
+  accent-color: var(--brand);
+}
+.field--check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+.field--check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--brand);
+}
+
+/* ---- Run ---- */
+.run {
+  margin-top: 16px;
+}
+
+/* ---- Buttons ---- */
+.btn {
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.92rem;
+  padding: 9px 16px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+.btn:hover {
+  border-color: var(--brand);
+}
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.btn--primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.btn--primary:hover {
+  filter: brightness(1.05);
+}
+.btn--ghost {
+  background: transparent;
+}
+
+/* ---- Error ---- */
+.error {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: color-mix(in srgb, #dc2626 12%, transparent);
+  color: #b91c1c;
+  border: 1px solid color-mix(in srgb, #dc2626 30%, transparent);
+  font-size: 0.92rem;
+}
+@media (prefers-color-scheme: dark) {
+  .error {
+    color: #fca5a5;
+  }
+}
+
+/* ---- Results ---- */
+.results {
+  margin-top: 24px;
+}
+.results__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.results__head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.results__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.result {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.result__thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--surface-2);
+  flex: none;
+}
+.result__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.result__name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.result__sizes {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.result__sizes em {
+  font-style: normal;
+  font-weight: 600;
+}
+.result__sizes em.good {
+  color: var(--accent);
+}
+.result__sizes em.bad {
+  color: var(--text-muted);
+}

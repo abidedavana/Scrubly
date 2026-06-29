@@ -5,6 +5,7 @@ import { TabNav, type ToolId, type Tool } from './components/TabNav'
 import { ToolPlaceholder } from './components/ToolPlaceholder'
 import { VerifyPanel } from './components/VerifyPanel'
 import { Footer } from './components/Footer'
+import { ImagesTool } from './tools/images/ImagesTool'
 
 const TOOLS: Tool[] = [
   { id: 'images', label: 'Images', blurb: 'Convert, compress and resize JPG, PNG and WebP.' },
@@ -23,7 +24,11 @@ export function App() {
       <PrivacyBar />
       <main class="container">
         <TabNav tools={TOOLS} active={active} onSelect={setActive} />
-        <ToolPlaceholder label={current.label} blurb={current.blurb} />
+        {active === 'images' ? (
+          <ImagesTool />
+        ) : (
+          <ToolPlaceholder label={current.label} blurb={current.blurb} />
+        )}
         <VerifyPanel />
       </main>
       <Footer />
