@@ -13,6 +13,12 @@ export function replaceExt(name: string, ext: string): string {
   return `${base}.${ext}`
 }
 
+export function bytesToBlob(bytes: Uint8Array, type: string): Blob {
+  // Our byte arrays are always backed by a regular ArrayBuffer (never shared),
+  // which TS 6's stricter BlobPart typing needs spelled out.
+  return new Blob([bytes as Uint8Array<ArrayBuffer>], { type })
+}
+
 export function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

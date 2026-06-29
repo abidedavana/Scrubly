@@ -7,6 +7,7 @@ import { VerifyPanel } from './components/VerifyPanel'
 import { Footer } from './components/Footer'
 import { ImagesTool } from './tools/images/ImagesTool'
 import { HeicTool } from './tools/heic/HeicTool'
+import { CleanTool } from './tools/clean/CleanTool'
 
 const TOOLS: Tool[] = [
   { id: 'images', label: 'Images', blurb: 'Convert, compress and resize JPG, PNG and WebP.' },
@@ -29,6 +30,8 @@ export function App() {
           <ImagesTool />
         ) : active === 'heic' ? (
           <HeicTool />
+        ) : active === 'clean' ? (
+          <CleanTool />
         ) : (
           <ToolPlaceholder label={current.label} blurb={current.blurb} />
         )}

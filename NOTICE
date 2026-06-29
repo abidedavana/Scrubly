@@ -16,3 +16,6 @@ Current dependencies
 - client-zip (MIT) — https://github.com/Touffy/client-zip
 - heic2any (MIT) — https://github.com/alexcorvi/heic2any
   bundles libheif (LGPL-3.0 / MIT components) — https://github.com/strukturag/libheif
+- exifr (MIT) — https://github.com/MikeKovarik/exifr
+- piexifjs (MIT) — https://github.com/hMatoba/piexifjs
+- pdf-lib (MIT) — https://github.com/Hopding/pdf-lib

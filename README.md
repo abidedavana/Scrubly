@@ -45,8 +45,9 @@ code is never allowed to send it anywhere.
 
 🚧 **Early development.** Live so far: the app shell, the privacy guarantee, the
 deployment pipeline, the **Images** tool (convert / resize / compress in a Web
-Worker, with batch + zip download), and **HEIC → JPG/PNG** (Apple HEIC/HEIF decoded
-in-browser via a lazy-loaded WASM decoder). More tools are landing next. See
+Worker, with batch + zip download), **HEIC → JPG/PNG** (Apple HEIC/HEIF decoded
+in-browser via a lazy-loaded WASM decoder), and **Clean** (strip GPS/EXIF from photos
+and metadata from PDFs, with a before/after proof). More tools are landing next. See
 [`BUILD_PLAN.md`](BUILD_PLAN.md) for the roadmap and [`SPEC.md`](SPEC.md) for the
 design.
 
@@ -55,7 +56,7 @@ design.
 | 0 | Scaffold, CSP, deploy pipeline | ✅ |
 | 1 | Images: convert / resize / compress | ✅ |
 | 2 | HEIC → JPG/PNG | ✅ |
-| 3 | Clean: strip metadata | ⏳ |
+| 3 | Clean: strip metadata | ✅ |
 | 4 | PDF: merge / split | ⏳ |
 | 5 | Polish & launch | ⏳ |
 
@@ -71,6 +72,7 @@ npm install
 npm run dev        # start the dev server
 npm run build      # production build → dist/
 npm run typecheck  # type-check without emitting
+npm test           # verify metadata stripping actually removes GPS/EXIF + PDF metadata
 ```
 
 ## License
