@@ -2,10 +2,11 @@ import { useState } from 'preact/hooks'
 import { Dropzone } from '../../components/Dropzone'
 import { ConvertOptions } from '../../components/ConvertOptions'
 import { ResultsList } from '../../components/ResultsList'
+import { decodeHeicToPng, isHeic } from '../../lib/heic'
 import { encodeImages } from '../../lib/image'
 import type { OutputFormat } from '../../lib/image-types'
 import type { ResultItem } from '../../lib/convert-types'
-import { formatBytes, replaceExt } from '../../lib/files'
+import { replaceExt } from '../../lib/files'
 
 const FORMAT_EXT: Record<OutputFormat, string> = {
   'image/jpeg': 'jpg',
@@ -13,21 +14,20 @@ const FORMAT_EXT: Record<OutputFormat, string> = {
   'image/webp': 'webp',
 }
 
-export function ImagesTool() {
+export function HeicTool() {
   const [files, setFiles] = useState<File[]>([])
   const [format, setFormat] = useState<OutputFormat>('image/jpeg')
-  const [quality, setQuality] = useState(0.8)
+  const [quality, setQuality] = useState(0.9)
   const [resize, setResize] = useState(false)
   const [maxDim, setMaxDim] = useState(2048)
   const [busy, setBusy] = useState(false)
+  const [status, setStatus] = useState<string | null>(null)
   const [results, setResults] = useState<ResultItem[]>([])
   const [error, setError] = useState<string | null>(null)
 
-  const totalSize = files.reduce((sum, f) => sum + f.size, 0)
-
   function addFiles(incoming: File[]) {
-    const images = incoming.filter((f) => f.type.startsWith('image/'))
-    if (images.length) setFiles((prev) => [...prev, ...images])
+    const heics = incoming.filter(isHeic)
+    if (heics.length) setFiles((prev) => [...prev, ...heics])
   }
 
   function clearResults() {
@@ -41,6 +41,7 @@ export function ImagesTool() {
     clearResults()
     setFiles([])
     setError(null)
+    setStatus(null)
   }
 
   async function run() {
@@ -48,25 +49,40 @@ export function ImagesTool() {
     setBusy(true)
     setError(null)
     clearResults()
+    setStatus(null)
     try {
-      const out = await encodeImages(files, {
-        format,
-        quality,
-        maxDimension: resize ? maxDim : undefined,
-      })
-      const items: ResultItem[] = out.map((r, i) => ({
-        id: `${i}-${r.name}`,
-        name: replaceExt(files[i].name, FORMAT_EXT[format]),
-        originalSize: files[i].size,
-        size: r.blob.size,
-        width: r.width,
-        height: r.height,
-        blob: r.blob,
-        url: URL.createObjectURL(r.blob),
-      }))
-      setResults(items)
+      const items: ResultItem[] = []
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        setStatus(`Decoding ${i + 1} of ${files.length}…`)
+        // Yield so the status paints before the (heavy, main-thread) HEIC decode.
+        await new Promise((r) => setTimeout(r, 0))
+        const png = await decodeHeicToPng(file)
+        const pngFile = new File([png], file.name, { type: 'image/png' })
+        const [enc] = await encodeImages([pngFile], {
+          format,
+          quality,
+          maxDimension: resize ? maxDim : undefined,
+        })
+        items.push({
+          id: `${i}-${file.name}`,
+          name: replaceExt(file.name, FORMAT_EXT[format]),
+          originalSize: file.size,
+          size: enc.blob.size,
+          width: enc.width,
+          height: enc.height,
+          blob: enc.blob,
+          url: URL.createObjectURL(enc.blob),
+        })
+        setResults([...items]) // progressive — show each as it finishes
+      }
+      setStatus(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong while processing.')
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Could not decode that HEIC file. It may be an unsupported variant.',
+      )
     } finally {
       setBusy(false)
     }
@@ -75,23 +91,21 @@ export function ImagesTool() {
   return (
     <section class="panel">
       <Dropzone
-        accept="image/*"
+        accept=".heic,.heif,image/heic,image/heif"
         multiple
         onFiles={addFiles}
         title={
           files.length
-            ? `${files.length} image${files.length > 1 ? 's' : ''} ready — drop more or click`
-            : 'Drop images here'
+            ? `${files.length} HEIC file${files.length > 1 ? 's' : ''} ready — drop more or click`
+            : 'Drop HEIC photos here'
         }
-        hint="JPG, PNG, WebP, GIF, BMP — converted, resized and compressed entirely on your device."
+        hint="Apple HEIC/HEIF photos converted to JPG or PNG, entirely on your device."
       />
 
       {files.length > 0 && (
         <>
           <div class="filebar">
-            <span>
-              {files.length} selected · {formatBytes(totalSize)}
-            </span>
+            <span>{files.length} selected</span>
             <button class="btn btn--ghost" type="button" onClick={reset}>
               Clear
             </button>
@@ -110,7 +124,9 @@ export function ImagesTool() {
 
           <div class="run">
             <button class="btn btn--primary" type="button" disabled={busy} onClick={run}>
-              {busy ? 'Processing…' : `Process ${files.length} image${files.length > 1 ? 's' : ''}`}
+              {busy
+                ? (status ?? 'Converting…')
+                : `Convert ${files.length} HEIC file${files.length > 1 ? 's' : ''}`}
             </button>
           </div>
         </>
@@ -122,7 +138,7 @@ export function ImagesTool() {
         </p>
       )}
 
-      <ResultsList results={results} zipName="scrubly-images.zip" />
+      <ResultsList results={results} zipName="scrubly-heic.zip" />
     </section>
   )
 }

@@ -12,3 +12,7 @@ Current dependencies
 - Preact (MIT) — https://github.com/preactjs/preact
 - Vite (MIT) — https://github.com/vitejs/vite
 - @preact/preset-vite (MIT) — https://github.com/preactjs/preset-vite
+- Comlink (Apache-2.0) — https://github.com/GoogleChromeLabs/comlink
+- client-zip (MIT) — https://github.com/Touffy/client-zip
+- heic2any (MIT) — https://github.com/alexcorvi/heic2any
+  bundles libheif (LGPL-3.0 / MIT components) — https://github.com/strukturag/libheif

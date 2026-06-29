@@ -43,9 +43,10 @@ code is never allowed to send it anywhere.
 
 ## Status
 
-🚧 **Early development.** The app shell, privacy guarantee, deployment pipeline, and
-the **Images** tool (convert / resize / compress, in-browser via a Web Worker, with
-batch + zip download) are live. More tools are landing next. See
+🚧 **Early development.** Live so far: the app shell, the privacy guarantee, the
+deployment pipeline, the **Images** tool (convert / resize / compress in a Web
+Worker, with batch + zip download), and **HEIC → JPG/PNG** (Apple HEIC/HEIF decoded
+in-browser via a lazy-loaded WASM decoder). More tools are landing next. See
 [`BUILD_PLAN.md`](BUILD_PLAN.md) for the roadmap and [`SPEC.md`](SPEC.md) for the
 design.
 
@@ -53,7 +54,7 @@ design.
 | ----- | ----- | ------ |
 | 0 | Scaffold, CSP, deploy pipeline | ✅ |
 | 1 | Images: convert / resize / compress | ✅ |
-| 2 | HEIC → JPG/PNG | ⏳ |
+| 2 | HEIC → JPG/PNG | ✅ |
 | 3 | Clean: strip metadata | ⏳ |
 | 4 | PDF: merge / split | ⏳ |
 | 5 | Polish & launch | ⏳ |

@@ -6,6 +6,7 @@ import { ToolPlaceholder } from './components/ToolPlaceholder'
 import { VerifyPanel } from './components/VerifyPanel'
 import { Footer } from './components/Footer'
 import { ImagesTool } from './tools/images/ImagesTool'
+import { HeicTool } from './tools/heic/HeicTool'
 
 const TOOLS: Tool[] = [
   { id: 'images', label: 'Images', blurb: 'Convert, compress and resize JPG, PNG and WebP.' },
@@ -26,6 +27,8 @@ export function App() {
         <TabNav tools={TOOLS} active={active} onSelect={setActive} />
         {active === 'images' ? (
           <ImagesTool />
+        ) : active === 'heic' ? (
+          <HeicTool />
         ) : (
           <ToolPlaceholder label={current.label} blurb={current.blurb} />
         )}
