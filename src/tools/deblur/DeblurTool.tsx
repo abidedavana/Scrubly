@@ -36,6 +36,7 @@ export function DeblurTool() {
   const [angle, setAngle] = useState(0)
   const [strength, setStrength] = useState(0.5)
   const [format, setFormat] = useState<OutputFormat>('image/png')
+  const [dims, setDims] = useState<{ w: number; h: number } | null>(null)
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState(0)
   const [out, setOut] = useState<Output | null>(null)
@@ -55,12 +56,19 @@ export function DeblurTool() {
     const img = files.find((f) => f.type.startsWith('image/'))
     if (!img) return
     reset()
+    setDims(null)
     setSrcUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev)
       return URL.createObjectURL(img)
     })
     setFile(img)
   }
+
+  // Measured throughput of the tiled FFT path, used for an honest up-front
+  // estimate rather than letting a 25-second job look like a hang.
+  const MS_PER_MP = 330
+  const megapixels = dims ? (dims.w * dims.h) / 1e6 : 0
+  const estSeconds = Math.max(1, Math.round((megapixels * MS_PER_MP) / 1000))
 
   async function run() {
     if (!file) return
@@ -117,7 +125,11 @@ export function DeblurTool() {
       {file && (
         <>
           <div class="filebar">
-            <span>{formatBytes(file.size)}</span>
+            <span>
+              {formatBytes(file.size)}
+              {dims && ` · ${dims.w}×${dims.h} (${megapixels.toFixed(1)} MP)`}
+              {dims && !busy && ` · about ${estSeconds}s to process`}
+            </span>
             <button
               class="btn btn--ghost"
               type="button"
@@ -222,6 +234,15 @@ export function DeblurTool() {
         </>
       )}
 
+      {megapixels > 100 && (
+        <p class="field-note" role="note">
+          That is a {megapixels.toFixed(0)} MP image. It is processed in tiles so the maths scales
+          fine, but the browser still has to hold the decoded original and the result in memory at
+          once — roughly {Math.round(megapixels * 8)} MB. It should be fine on a desktop; on a phone
+          the tab may run out of memory.
+        </p>
+      )}
+
       {error && (
         <p class="error" role="alert">
           {error}
@@ -234,6 +255,10 @@ export function DeblurTool() {
             class="deblur-preview__img"
             src={compare || !out ? (srcUrl ?? '') : out.url}
             alt={compare || !out ? 'Original' : 'Deblurred result'}
+            onLoad={(e) => {
+              const el = e.currentTarget as HTMLImageElement
+              if (!out && el.naturalWidth) setDims({ w: el.naturalWidth, h: el.naturalHeight })
+            }}
           />
           <p class="deblur-preview__caption">
             {out

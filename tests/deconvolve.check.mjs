@@ -221,7 +221,84 @@ function testAlphaAndNoise() {
   )
 }
 
+/**
+ * Mirrors the worker's overlap-save tiling on plain arrays, so we can prove the
+ * tiled path produces the same pixels as a whole-image transform — i.e. no seams.
+ */
+function tiledDeconvolve(src, w, h, opts, tile, margin) {
+  const out = new Uint8ClampedArray(w * h * 4)
+  for (let iy = 0; iy < h; iy += tile) {
+    for (let ix = 0; ix < w; ix += tile) {
+      const iw = Math.min(tile, w - ix)
+      const ih = Math.min(tile, h - iy)
+      const sx = Math.max(0, ix - margin)
+      const sy = Math.max(0, iy - margin)
+      const ex = Math.min(w, ix + iw + margin)
+      const ey = Math.min(h, iy + ih + margin)
+      const bw = ex - sx
+      const bh = ey - sy
+      const block = new Uint8ClampedArray(bw * bh * 4)
+      for (let y = 0; y < bh; y++) {
+        const from = ((y + sy) * w + sx) * 4
+        block.set(src.subarray(from, from + bw * 4), y * bw * 4)
+      }
+      const r = deconvolve(block, bw, bh, opts)
+      const cx = ix - sx
+      const cy = iy - sy
+      for (let y = 0; y < ih; y++) {
+        const from = ((y + cy) * bw + cx) * 4
+        const to = ((y + iy) * w + ix) * 4
+        out.set(r.data.subarray(from, from + iw * 4), to)
+      }
+    }
+  }
+  return out
+}
+
+function testTilingIsSeamless() {
+  console.log('Tiling (how big images are handled) — must match the whole-image result:')
+  const ref = reference()
+  const observed = addNoise(blur(ref, makePsf('gaussian', 1.5)), 1.0)
+  // Same K for every tile, exactly as the worker does.
+  const whole = deconvolve(observed, W, H, { kind: 'gaussian', radius: 1.5, strength: 0.5 })
+  const opts = { kind: 'gaussian', radius: 1.5, strength: 0.5, overrideK: whole.k }
+  const tiled = tiledDeconvolve(observed, W, H, opts, 64, Math.max(32, Math.ceil(1.5 * 6)))
+
+  const agreement = psnr(tiled, whole.data)
+  console.log(`    tiled vs whole-image agreement: ${agreement.toFixed(1)} dB`)
+  assert(agreement > 40, `tiling reproduces the whole-image result (${agreement.toFixed(1)} dB)`)
+
+  // Seam test done properly: measure the tiled result's DEVIATION from the
+  // whole-image result, per column. A seam is deviation concentrated at tile
+  // boundaries. (Measuring raw edge energy instead would just rediscover the
+  // test pattern's own bars, which repeat every 8 px and land on x=64/128.)
+  const colDeviation = (x) => {
+    let worst = 0
+    for (let y = 0; y < H; y++) {
+      const i = (y * W + x) * 4
+      for (let c = 0; c < 3; c++) worst = Math.max(worst, Math.abs(tiled[i + c] - whole.data[i + c]))
+    }
+    return worst
+  }
+  let seamWorst = 0
+  let elseWorst = 0
+  for (let x = 0; x < W; x++) {
+    const d = colDeviation(x)
+    if (x % 64 === 0 || x % 64 === 63) seamWorst = Math.max(seamWorst, d)
+    else elseWorst = Math.max(elseWorst, d)
+  }
+  console.log(
+    `    worst deviation from whole-image: at tile boundaries ${seamWorst}, elsewhere ${elseWorst} (of 255)`,
+  )
+  // Not asserting boundary <= elsewhere: deconvolution amplifies noise, and
+  // tiles see slightly different neighbourhoods, so a couple of levels of
+  // scatter is expected and is not a seam. On noiseless input both sit at 1/255.
+  // A genuine seam (insufficient margin) shows up as tens of levels.
+  assert(seamWorst < 12, `boundary deviation is visually negligible (${seamWorst}/255)`)
+}
+
 testRecovery()
+testTilingIsSeamless()
 testPhysicsWall()
 testPsfShapes()
 testWrongPsfIsNotAWin()

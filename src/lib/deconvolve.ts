@@ -36,6 +36,12 @@ export interface DeconvOptions {
   angle?: number
   /** 0..1. Higher pushes harder (less regularisation) and risks ringing. */
   strength: number
+  /**
+   * Use this regularisation instead of measuring it. Essential when tiling:
+   * every tile must be filtered identically or the tiles get different
+   * treatment and the seams become visible.
+   */
+  overrideK?: number
 }
 
 export interface Psf {
@@ -65,6 +71,20 @@ function linearToSrgb(v: number): number {
 }
 
 // ---------- point-spread functions ----------
+
+/**
+ * Padding deconvolve() adds around a block before transforming. Callers that
+ * tile need this to size blocks so the padded result lands exactly on a power
+ * of two — otherwise a 1024px block pads to 2048 and costs 4x more for nothing.
+ */
+export function internalMargin(psf: Psf): number {
+  return Math.max(8, (psf.size - 1))
+}
+
+/** Largest block width whose padded transform fits in `targetPad`. */
+export function blockSizeForPad(targetPad: number, psf: Psf): number {
+  return targetPad - internalMargin(psf) * 2
+}
 
 export function makePsf(kind: PsfKind, radius: number, angleDeg = 0): Psf {
   const r = Math.max(0.3, radius)
@@ -179,7 +199,7 @@ export function estimateNoiseSigma(data: Uint8ClampedArray, w: number, h: number
   return Math.max(0.0008, sigma255 / 255)
 }
 
-function signalStd(data: Uint8ClampedArray, w: number, h: number): number {
+export function signalStd(data: Uint8ClampedArray, w: number, h: number): number {
   let sum = 0
   let sumSq = 0
   const n = w * h
@@ -211,6 +231,39 @@ export interface DeconvResult {
   padH: number
 }
 
+/**
+ * Precomputed optical transfer function. Building it costs a full 2D FFT, so
+ * when tiling a large image we do it once and reuse it for every tile.
+ */
+export interface Otf {
+  re: Float32Array
+  im: Float32Array
+  padW: number
+  padH: number
+}
+
+let otfCache: { key: string; otf: Otf } | null = null
+
+export function buildOtf(psf: Psf, padW: number, padH: number): Otf {
+  const key = `${psf.size}:${padW}x${padH}:${psf.data[0]}:${psf.data[psf.data.length >> 1]}`
+  if (otfCache && otfCache.key === key) return otfCache.otf
+
+  const psfHalf = (psf.size - 1) / 2
+  const re = new Float32Array(padW * padH)
+  const im = new Float32Array(padW * padH)
+  for (let y = 0; y < psf.size; y++) {
+    for (let x = 0; x < psf.size; x++) {
+      const px = (((x - psfHalf) % padW) + padW) % padW
+      const py = (((y - psfHalf) % padH) + padH) % padH
+      re[py * padW + px] = psf.data[y * psf.size + x]
+    }
+  }
+  fft2d(re, im, padW, padH, false)
+  const otf = { re, im, padW, padH }
+  otfCache = { key, otf }
+  return otf
+}
+
 export function deconvolve(
   src: Uint8ClampedArray,
   w: number,
@@ -223,85 +276,107 @@ export function deconvolve(
 
   // Regularisation: start from the measured noise-to-signal ratio, then let the
   // user push it. Never let it reach zero — on quantised data that explodes.
-  const sigma = estimateNoiseSigma(src, w, h)
-  const nsr = (sigma / signalStd(src, w, h)) ** 2
-  const push = Math.pow(10, (0.5 - clamp01(opts.strength)) * 3)
-  const k = Math.min(1, Math.max(1e-5, nsr * push))
+  let sigma = 0
+  let k: number
+  if (opts.overrideK !== undefined) {
+    k = opts.overrideK
+  } else {
+    sigma = estimateNoiseSigma(src, w, h)
+    const nsr = (sigma / signalStd(src, w, h)) ** 2
+    k = Math.min(1, Math.max(1e-5, nsr * Math.pow(10, (0.5 - clamp01(opts.strength)) * 3)))
+  }
 
-  const margin = Math.max(8, psfHalf * 2)
+  const margin = internalMargin(psf)
   const padW = nextPow2(w + margin * 2)
   const padH = nextPow2(h + margin * 2)
+  void psfHalf
   const ox = (padW - w) >> 1
   const oy = (padH - h) >> 1
 
   // Optical transfer function: PSF centred on the origin with circular wrap, so
-  // deconvolution introduces no spatial shift.
-  const hRe = new Float32Array(padW * padH)
-  const hIm = new Float32Array(padW * padH)
-  for (let y = 0; y < psf.size; y++) {
-    for (let x = 0; x < psf.size; x++) {
-      const px = (((x - psfHalf) % padW) + padW) % padW
-      const py = (((y - psfHalf) % padH) + padH) % padH
-      hRe[py * padW + px] = psf.data[y * psf.size + x]
-    }
-  }
-  fft2d(hRe, hIm, padW, padH, false)
+  // deconvolution introduces no spatial shift. Cached across tiles.
+  const { re: hRe, im: hIm } = buildOtf(psf, padW, padH)
 
   const out = new Uint8ClampedArray(w * h * 4)
   const re = new Float32Array(padW * padH)
   const im = new Float32Array(padW * padH)
 
-  for (let c = 0; c < 3; c++) {
-    // Mean of this channel in linear light, used as the value the border fades
-    // to so the circular wrap has no discontinuity.
-    let mean = 0
-    for (let p = 0, i = c; p < w * h; p++, i += 4) mean += SRGB_TO_LINEAR[src[i]]
-    mean /= w * h
+  // Deconvolve LUMINANCE only, then re-apply the recovered luminance to the
+  // original colours as a per-pixel gain. Blur destroys luminance detail — that
+  // is what "sharpness" is — while chroma carries very little high-frequency
+  // information (which is why every image codec subsamples it). Doing one
+  // transform instead of three is 3x faster and, as a bonus, cannot produce the
+  // coloured fringing that per-channel deconvolution does when the channels
+  // ring slightly differently.
+  const lumaOf = (i: number) =>
+    0.2126 * SRGB_TO_LINEAR[src[i]] +
+    0.7152 * SRGB_TO_LINEAR[src[i + 1]] +
+    0.0722 * SRGB_TO_LINEAR[src[i + 2]]
 
-    im.fill(0)
-    for (let y = 0; y < padH; y++) {
-      const sy = reflect(y - oy, h)
-      const rowOff = y * padW
-      // Cosine taper: 1 across the image, easing to 0 out in the pad band.
-      const dy = y < oy ? oy - y : y >= oy + h ? y - (oy + h) + 1 : 0
-      for (let x = 0; x < padW; x++) {
-        const sx = reflect(x - ox, w)
-        const dx = x < ox ? ox - x : x >= ox + w ? x - (ox + w) + 1 : 0
-        const d = Math.max(dx, dy)
-        const t = d === 0 ? 1 : d >= margin ? 0 : 0.5 * (1 + Math.cos((Math.PI * d) / margin))
-        const v = SRGB_TO_LINEAR[src[(sy * w + sx) * 4 + c]]
-        re[rowOff + x] = mean + (v - mean) * t
-      }
+  let mean = 0
+  for (let p = 0, i = 0; p < w * h; p++, i += 4) mean += lumaOf(i)
+  mean /= w * h
+
+  for (let y = 0; y < padH; y++) {
+    const sy = reflect(y - oy, h)
+    const rowOff = y * padW
+    // Cosine taper: 1 across the image, easing to 0 out in the pad band.
+    const dy = y < oy ? oy - y : y >= oy + h ? y - (oy + h) + 1 : 0
+    for (let x = 0; x < padW; x++) {
+      const sx = reflect(x - ox, w)
+      const dx = x < ox ? ox - x : x >= ox + w ? x - (ox + w) + 1 : 0
+      const d = dx > dy ? dx : dy
+      const t = d === 0 ? 1 : d >= margin ? 0 : 0.5 * (1 + Math.cos((Math.PI * d) / margin))
+      re[rowOff + x] = mean + (lumaOf((sy * w + sx) * 4) - mean) * t
     }
-
-    fft2d(re, im, padW, padH, false)
-
-    // Wiener: G * conj(H) / (|H|^2 + K)
-    for (let i = 0; i < re.length; i++) {
-      const hr = hRe[i]
-      const hi = hIm[i]
-      const denom = hr * hr + hi * hi + k
-      const gr = re[i]
-      const gi = im[i]
-      re[i] = (gr * hr + gi * hi) / denom
-      im[i] = (gi * hr - gr * hi) / denom
-    }
-
-    fft2d(re, im, padW, padH, true)
-
-    for (let y = 0; y < h; y++) {
-      const srcRow = (y + oy) * padW + ox
-      const dstRow = y * w
-      for (let x = 0; x < w; x++) {
-        out[(dstRow + x) * 4 + c] = linearToSrgb(re[srcRow + x])
-      }
-    }
-
-    onProgress?.((c + 1) / 3)
   }
 
-  for (let p = 0, i = 3; p < w * h; p++, i += 4) out[i] = src[i]
+  onProgress?.(0.15)
+  fft2d(re, im, padW, padH, false)
+  onProgress?.(0.45)
 
+  // Wiener: G * conj(H) / (|H|^2 + K)
+  for (let i = 0; i < re.length; i++) {
+    const hr = hRe[i]
+    const hi = hIm[i]
+    const denom = hr * hr + hi * hi + k
+    const gr = re[i]
+    const gi = im[i]
+    re[i] = (gr * hr + gi * hi) / denom
+    im[i] = (gi * hr - gr * hi) / denom
+  }
+
+  onProgress?.(0.55)
+  fft2d(re, im, padW, padH, true)
+  onProgress?.(0.9)
+
+  for (let y = 0; y < h; y++) {
+    const srcRow = (y + oy) * padW + ox
+    const dstRow = y * w
+    for (let x = 0; x < w; x++) {
+      const i = (dstRow + x) * 4
+      const y0 = lumaOf(i)
+      const y1 = re[srcRow + x]
+      if (y0 > 0.004) {
+        // Multiplicative gain keeps hue and saturation exactly.
+        let g = y1 / y0
+        if (g < 0) g = 0
+        else if (g > 8) g = 8
+        out[i] = linearToSrgb(SRGB_TO_LINEAR[src[i]] * g)
+        out[i + 1] = linearToSrgb(SRGB_TO_LINEAR[src[i + 1]] * g)
+        out[i + 2] = linearToSrgb(SRGB_TO_LINEAR[src[i + 2]] * g)
+      } else {
+        // Near-black: a ratio is meaningless, so add the recovered difference.
+        const delta = y1 - y0
+        out[i] = linearToSrgb(SRGB_TO_LINEAR[src[i]] + delta)
+        out[i + 1] = linearToSrgb(SRGB_TO_LINEAR[src[i + 1]] + delta)
+        out[i + 2] = linearToSrgb(SRGB_TO_LINEAR[src[i + 2]] + delta)
+      }
+      out[i + 3] = src[i + 3]
+    }
+  }
+
+  onProgress?.(1)
   return { data: out, noiseSigma: sigma, k, padW, padH }
 }
 
