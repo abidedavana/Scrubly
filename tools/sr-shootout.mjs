@@ -9,7 +9,10 @@
 //
 //   node tools/sr-shootout.mjs [model.onnx ...]
 
-import { loadGraph, runGraph } from './span-reference.mjs'
+// Inference runs through onnxruntime-node so ANY architecture can be scored,
+// not just the ops our hand-written CPU reference implements. ORT is a dev
+// dependency and never ships.
+import ort from 'onnxruntime-node'
 import { FONT, renderTextExport as renderText, down2, blockify } from './text-legibility-lib.mjs'
 import { lanczos3Resize, unsharpMaskInPlace } from '../src/lib/resample.ts'
 import { deconvolve } from '../src/lib/deconvolve.ts'
@@ -42,8 +45,8 @@ function geom(xh, len, pad = 4) {
  * after normalising for brightness/contrast so methods that shift levels are
  * not unfairly penalised.
  */
-function readBack(img, text, xh) {
-  const g = geom(xh, text.length)
+function readBack(img, text, xh, pad) {
+  const g = geom(xh, text.length, pad)
   let correct = 0
   let total = 0
   const got = []
@@ -56,8 +59,8 @@ function readBack(img, text, xh) {
     let best = null
     let bestScore = Infinity
     for (const c of CHARS) {
-      const tpl = renderText(c, xh)
-      const tg = geom(xh, 1)
+      const tpl = renderText(c, xh, pad)
+      const tg = geom(xh, 1, pad)
       // normalised SSD over the glyph box
       let ssd = 0
       let n = 0
@@ -118,7 +121,45 @@ function deconvThenUp(img) {
   return { data: d, w: img.w * 2, h: img.h * 2 }
 }
 
-function modelUp(g, img) {
+/** Some exports (RealPLKSR) have a FIXED input size; pad up to it and crop back. */
+function padTo(img, side) {
+  if (img.w === side && img.h === side) return { img, ox: 0, oy: 0 }
+  const d = new Uint8ClampedArray(side * side * 4)
+  // edge-replicate rather than zero-fill: a black border would make the model
+  // hallucinate a hard edge right next to the text.
+  for (let y = 0; y < side; y++) {
+    const sy = Math.min(img.h - 1, y)
+    for (let x = 0; x < side; x++) {
+      const sx = Math.min(img.w - 1, x)
+      const s = (sy * img.w + sx) * 4
+      const t = (y * side + x) * 4
+      d[t] = img.data[s]
+      d[t + 1] = img.data[s + 1]
+      d[t + 2] = img.data[s + 2]
+      d[t + 3] = 255
+    }
+  }
+  return { img: { data: d, w: side, h: side }, ox: 0, oy: 0 }
+}
+
+function cropTo(img, w, h) {
+  if (img.w === w && img.h === h) return img
+  const d = new Uint8ClampedArray(w * h * 4)
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const s = (Math.min(img.h - 1, y) * img.w + Math.min(img.w - 1, x)) * 4
+      const t = (y * w + x) * 4
+      d[t] = img.data[s]
+      d[t + 1] = img.data[s + 1]
+      d[t + 2] = img.data[s + 2]
+      d[t + 3] = 255
+    }
+  return { data: d, w, h }
+}
+
+async function modelUp(session, img, fixedSide) {
+  const orig = img
+  if (fixedSide) img = padTo(img, fixedSide).img
   const n = img.w * img.h
   const chw = new Float32Array(3 * n)
   for (let p = 0; p < n; p++) {
@@ -126,16 +167,23 @@ function modelUp(g, img) {
     chw[n + p] = img.data[p * 4 + 1] / 255
     chw[2 * n + p] = img.data[p * 4 + 2] / 255
   }
-  const out = runGraph(g, { c: 3, h: img.h, w: img.w, data: chw })
-  const on = out.h * out.w
+  const feeds = {}
+  feeds[session.inputNames[0]] = new ort.Tensor('float32', chw, [1, 3, img.h, img.w])
+  void orig
+  const res = await session.run(feeds)
+  const o = res[session.outputNames[0]]
+  const [, , oh, ow] = o.dims
+  const on = oh * ow
   const d = new Uint8ClampedArray(on * 4)
   for (let p = 0; p < on; p++) {
-    d[p * 4] = out.data[p] * 255
-    d[p * 4 + 1] = out.data[on + p] * 255
-    d[p * 4 + 2] = out.data[2 * on + p] * 255
+    d[p * 4] = o.data[p] * 255
+    d[p * 4 + 1] = o.data[on + p] * 255
+    d[p * 4 + 2] = o.data[2 * on + p] * 255
     d[p * 4 + 3] = 255
   }
-  return { data: d, w: out.w, h: out.h }
+  const scale = Math.round(ow / img.w)
+  const out = { data: d, w: ow, h: oh }
+  return fixedSide ? cropTo(out, orig.w * scale, orig.h * scale) : out
 }
 
 // ---- main ----
@@ -144,10 +192,23 @@ const modelPaths = process.argv.slice(2).filter((a) => a.endsWith('.onnx'))
 const models = []
 for (const p of modelPaths) {
   try {
-    models.push({ name: p.split(/[\\/]/).pop().replace('.onnx', ''), g: loadGraph(p) })
-    console.log(`loaded ${p}`)
+    const session = await ort.InferenceSession.create(p)
+    const short = p.split(/[\\/]/).pop().replace('.onnx', '').slice(0, 22)
+    // Probe for a fixed input size — several published exports refuse anything
+    // but the shape they were traced at, and report it in the error text.
+    let fixedSide = 0
+    try {
+      const f = {}
+      f[session.inputNames[0]] = new ort.Tensor('float32', new Float32Array(3 * 32 * 32), [1, 3, 32, 32])
+      await session.run(f)
+    } catch (e) {
+      const m = String(e.message).match(/Expected:\s*(\d+)/)
+      if (m) fixedSide = Number(m[1])
+    }
+    models.push({ name: short, session, fixedSide })
+    console.log(`loaded ${short}${fixedSide ? `  (fixed ${fixedSide}x${fixedSide} input)` : ''}`)
   } catch (e) {
-    console.log(`SKIP ${p}: ${e.message}`)
+    console.log(`SKIP ${p.split(/[\\/]/).pop()}: ${String(e.message).slice(0, 140)}`)
   }
 }
 console.log()
@@ -159,7 +220,7 @@ const methods = [
   { name: 'degraded (no restore)', fn: (img) => img, scale1: true },
   { name: 'lanczos + sharpen', fn: lanczosSharp },
   { name: 'deconvolve + lanczos', fn: deconvThenUp },
-  ...models.map((m) => ({ name: m.name, fn: (img) => modelUp(m.g, img) })),
+  ...models.map((m) => ({ name: m.name, fn: (img) => modelUp(m.session, img, m.fixedSide) })),
 ]
 
 console.log(`character accuracy reading back "${TEXT}"  (noise sigma ${NOISE}/255)\n`)
@@ -174,14 +235,25 @@ for (const m of methods) {
     const degraded = addNoise(blockify(down2(sharp), 0.5), NOISE)
     let restored
     try {
-      restored = m.fn(degraded)
+      restored = await m.fn(degraded)
     } catch (e) {
       cells.push('  ERR')
+      if (!globalThis.__shown) { globalThis.__shown = 1; console.log('   ('+m.name+' error: '+String(e.message).slice(0,150)+')') }
       continue
     }
-    // read back at whatever scale the method produced
-    const effXh = m.scale1 ? xh : xh * 2
-    const r = readBack(restored, TEXT, effXh)
+    // Normalise every method's output to the SHARP reference size before
+    // matching. Methods upscale by different factors (2x, 4x, 1x), and glyph
+    // spacing does not scale linearly through integer rounding, so comparing at
+    // native scale silently misaligns the slots and makes good models look bad.
+    const norm =
+      restored.w === sharp.w && restored.h === sharp.h
+        ? restored
+        : {
+            data: lanczos3Resize(restored.data, restored.w, restored.h, sharp.w, sharp.h),
+            w: sharp.w,
+            h: sharp.h,
+          }
+    const r = readBack(norm, TEXT, xh * 2, 4)
     cells.push(`${Math.round((r.correct / r.total) * 100)}%`.padStart(7))
   }
   console.log(m.name.padEnd(24) + cells.join(''))
