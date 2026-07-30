@@ -14,6 +14,11 @@ export interface EncodeOptions {
    * resample). Otherwise maxDimension only ever shrinks.
    */
   allowUpscale?: boolean
+  /**
+   * Unsharp-mask strength applied after an enlarge, 0 = off. Around 1.2 makes
+   * upscaled text read noticeably crisper; above ~2 starts to show halos.
+   */
+  sharpen?: number
 }
 
 export interface EncodeResult {

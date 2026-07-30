@@ -15,7 +15,16 @@ interface Props {
   onMaxDim: (n: number) => void
   upscale: boolean
   onUpscale: (b: boolean) => void
+  sharpen: number
+  onSharpen: (n: number) => void
 }
+
+const SHARPEN_LEVELS = [
+  { label: 'Off', value: 0 },
+  { label: 'Light', value: 0.6 },
+  { label: 'Medium', value: 1.2 },
+  { label: 'Strong', value: 2 },
+]
 
 export function ConvertOptions({
   format,
@@ -28,6 +37,8 @@ export function ConvertOptions({
   onMaxDim,
   upscale,
   onUpscale,
+  sharpen,
+  onSharpen,
 }: Props) {
   const lossy = format !== 'image/png'
   // Let the user type freely (a controlled number input that clamps per
@@ -104,9 +115,26 @@ export function ConvertOptions({
       )}
 
       {resize && upscale && (
+        <label class="field">
+          <span>Sharpen</span>
+          <select
+            value={String(sharpen)}
+            onChange={(e) => onSharpen(Number((e.target as HTMLSelectElement).value))}
+          >
+            {SHARPEN_LEVELS.map((l) => (
+              <option key={l.label} value={String(l.value)}>
+                {l.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {resize && upscale && (
         <p class="field-note" id="upscale-note">
-          Enlarging uses a high-quality resample, so zoomed images stay smooth instead of blocky —
-          but it can't add detail the original never captured.
+          Enlarging uses Lanczos resampling plus sharpening, which makes edges and text noticeably
+          crisper than a plain resize — but no upscaler can recover detail the original never
+          captured, so a small blurry photo will look smoother, not sharper.
           {format === 'image/png' &&
             ' Enlarged photos saved as PNG can get very large — JPEG or WebP is usually a better fit.'}
         </p>
