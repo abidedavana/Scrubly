@@ -1,8 +1,15 @@
 // MUST be first: strips fetch/XHR/WebSocket/etc before any other code runs.
 import './net-lockdown'
 import * as Comlink from 'comlink'
-import type { EncodeOptions, EncodeResult, ImageWorkerApi } from '../lib/image-types'
+import type {
+  DeblurOptions,
+  DeblurResult,
+  EncodeOptions,
+  EncodeResult,
+  ImageWorkerApi,
+} from '../lib/image-types'
 import { flattenToWhiteInPlace, lanczos3Resize, unsharpMaskInPlace } from '../lib/resample'
+import { deconvolve } from '../lib/deconvolve.ts'
 
 // Engines limit canvases by SIDE and by total AREA, and the area cap bites
 // first for near-square images (Chromium 16384², Firefox ~125 MP, iOS Safari
@@ -96,5 +103,57 @@ async function encodeImage(file: Blob, opts: EncodeOptions): Promise<EncodeResul
   }
 }
 
-const api: ImageWorkerApi = { encodeImage }
+// Deconvolution is FFT-based: cost grows with the padded power-of-two size and
+// it allocates several full-size Float32 planes. Beyond this it stops being an
+// interactive operation, so refuse rather than hang the tab.
+const MAX_DEBLUR_PIXELS = 12 * 1024 * 1024
+
+async function deblurImage(
+  file: Blob,
+  opts: DeblurOptions,
+  onProgress?: (fraction: number) => void,
+): Promise<DeblurResult> {
+  const bitmap = await createImageBitmap(file)
+  try {
+    const { width, height } = bitmap
+    if (width * height > MAX_DEBLUR_PIXELS) {
+      throw new Error(
+        `Image is ${(width * height / 1e6).toFixed(1)} MP — deblurring is limited to ` +
+          `${MAX_DEBLUR_PIXELS / 1e6} MP. Crop or shrink it first.`,
+      )
+    }
+
+    const canvas = new OffscreenCanvas(width, height)
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    if (!ctx) throw new Error('Canvas is not available in this browser.')
+    ctx.drawImage(bitmap, 0, 0)
+    const src = ctx.getImageData(0, 0, width, height)
+
+    const { data, noiseSigma, k } = deconvolve(
+      src.data,
+      width,
+      height,
+      {
+        kind: opts.kind,
+        radius: opts.radius,
+        angle: opts.angle,
+        strength: opts.strength,
+      },
+      onProgress,
+    )
+
+    if (opts.format === 'image/jpeg') flattenToWhiteInPlace(data)
+    ctx.putImageData(new ImageData(data, width, height), 0, 0)
+
+    const blob = await canvas.convertToBlob({
+      type: opts.format,
+      quality: opts.format === 'image/png' ? undefined : opts.quality,
+    })
+    return { blob, width, height, noiseSigma, k }
+  } finally {
+    bitmap.close()
+  }
+}
+
+const api: ImageWorkerApi = { encodeImage, deblurImage }
 Comlink.expose(api)

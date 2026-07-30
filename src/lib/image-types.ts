@@ -27,6 +27,30 @@ export interface EncodeResult {
   height: number
 }
 
+export interface DeblurOptions {
+  kind: 'gaussian' | 'disc' | 'motion'
+  /** Gaussian sigma, defocus disc radius, or motion length, in pixels. */
+  radius: number
+  /** Motion direction in degrees. */
+  angle?: number
+  /** 0..1 — higher pushes harder and risks ringing. */
+  strength: number
+  format: OutputFormat
+  quality: number
+}
+
+export interface DeblurResult extends EncodeResult {
+  /** Measured noise level of the input, 0..1. */
+  noiseSigma: number
+  /** Regularisation actually used. */
+  k: number
+}
+
 export interface ImageWorkerApi {
   encodeImage(file: Blob, opts: EncodeOptions): Promise<EncodeResult>
+  deblurImage(
+    file: Blob,
+    opts: DeblurOptions,
+    onProgress?: (fraction: number) => void,
+  ): Promise<DeblurResult>
 }

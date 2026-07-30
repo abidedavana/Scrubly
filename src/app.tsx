@@ -8,10 +8,12 @@ import { Footer } from './components/Footer'
 import { ImagesTool } from './tools/images/ImagesTool'
 import { HeicTool } from './tools/heic/HeicTool'
 import { CleanTool } from './tools/clean/CleanTool'
+import { DeblurTool } from './tools/deblur/DeblurTool'
 
 const TOOLS: Tool[] = [
   { id: 'images', label: 'Images', blurb: 'Convert, compress and resize JPG, PNG and WebP.' },
   { id: 'heic', label: 'HEIC → JPG', blurb: 'Turn iPhone HEIC photos into JPG or PNG.' },
+  { id: 'deblur', label: 'Deblur', blurb: 'Recover detail lost to focus or motion blur.' },
   { id: 'clean', label: 'Clean', blurb: 'Strip GPS, device info and hidden metadata before you share.' },
   { id: 'pdf', label: 'PDF', blurb: 'Merge and split PDF files.' },
 ]
@@ -30,6 +32,8 @@ export function App() {
           <ImagesTool />
         ) : active === 'heic' ? (
           <HeicTool />
+        ) : active === 'deblur' ? (
+          <DeblurTool />
         ) : active === 'clean' ? (
           <CleanTool />
         ) : (

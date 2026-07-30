@@ -13,6 +13,8 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "esModuleInterop": true,
+    // Lets the Node-based checks import the real .ts sources directly.
+    "allowImportingTsExtensions": true,
     "useDefineForClassFields": true,
     "noEmit": true,
     "types": ["vite/client"]

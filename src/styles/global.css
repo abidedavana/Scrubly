@@ -551,3 +551,27 @@ main.container {
   gap: 10px;
   flex-wrap: wrap;
 }
+
+/* ---- Deblur ---- */
+.dz-note {
+  margin-top: 12px;
+}
+.deblur-preview {
+  margin-top: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 12px;
+}
+.deblur-preview__img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.deblur-preview__caption {
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}

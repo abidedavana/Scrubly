@@ -23,6 +23,12 @@ it's something you can **verify**.
 ## Features
 
 - 📷 **HEIC → JPG/PNG** — open those iPhone photos anywhere, instantly.
+- 🔍 **Deblur** — recover detail lost to camera shake or a missed focus, by inverting the
+  blur (Wiener deconvolution). This is real recovery, not AI invention: blur spreads each
+  point of the scene over its neighbours and that is mathematically reversible while the
+  detail is still above the noise floor. Measured on synthetic targets: **+5.4 dB at blur
+  σ=1, +9.4 dB on motion blur**, tailing off to nothing past σ≈4 — past that the
+  information is genuinely gone, and the tool says so rather than faking it.
 - 🗜️ **Compress, resize & convert images** — JPG, PNG, WebP, with a quality slider.
 - 📄 **Merge & split PDFs** — combine, reorder, and extract pages.
 - 🧹 **Clean before you share** — one click strips GPS location, device info, and other
@@ -74,6 +80,8 @@ design.
 | 3 | Clean: strip metadata | ✅ |
 | 4 | PDF: merge / split | ⏳ |
 | 5 | Polish & launch | ⏳ |
+| + | Deblur (Wiener deconvolution) | ✅ |
+| + | Enlarge (Lanczos3 + sharpening) | ✅ |
 
 ## Tech stack
 

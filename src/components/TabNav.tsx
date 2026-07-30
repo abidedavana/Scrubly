@@ -1,4 +1,4 @@
-export type ToolId = 'images' | 'heic' | 'clean' | 'pdf'
+export type ToolId = 'images' | 'heic' | 'deblur' | 'clean' | 'pdf'
 
 export interface Tool {
   id: ToolId
