@@ -157,9 +157,28 @@ function cropTo(img, w, h) {
   return { data: d, w, h }
 }
 
+/** Pad to even dimensions — several exports contain a pixel_unshuffle that
+ *  reshapes by 2 and hard-fails on odd H or W. */
+function padEven(img) {
+  const w = img.w + (img.w & 1)
+  const h = img.h + (img.h & 1)
+  if (w === img.w && h === img.h) return img
+  const d = new Uint8ClampedArray(w * h * 4)
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const s = (Math.min(img.h - 1, y) * img.w + Math.min(img.w - 1, x)) * 4
+      const t = (y * w + x) * 4
+      d[t] = img.data[s]
+      d[t + 1] = img.data[s + 1]
+      d[t + 2] = img.data[s + 2]
+      d[t + 3] = 255
+    }
+  return { data: d, w, h }
+}
+
 async function modelUp(session, img, fixedSide) {
   const orig = img
-  if (fixedSide) img = padTo(img, fixedSide).img
+  img = fixedSide ? padTo(img, fixedSide).img : padEven(img)
   const n = img.w * img.h
   const chw = new Float32Array(3 * n)
   for (let p = 0; p < n; p++) {
@@ -183,7 +202,7 @@ async function modelUp(session, img, fixedSide) {
   }
   const scale = Math.round(ow / img.w)
   const out = { data: d, w: ow, h: oh }
-  return fixedSide ? cropTo(out, orig.w * scale, orig.h * scale) : out
+  return cropTo(out, orig.w * scale, orig.h * scale)
 }
 
 // ---- main ----
