@@ -1,8 +1,18 @@
 import { defineConfig, type Plugin } from 'vite'
 import preact from '@preact/preset-vite'
 
-// The privacy guarantee, enforced (not just promised): with `connect-src 'none'`
-// the browser itself blocks any upload/fetch, so a bug can't leak a file.
+// Part one of the privacy guarantee: `connect-src 'none'` stops the page from
+// opening any network connection.
+//
+// Important caveat, verified rather than assumed: this policy does NOT cover
+// workers loaded from a same-origin https: URL — those take their policy from
+// their own response headers, and GitHub Pages sends none. Since the workers are
+// where file bytes are actually handled, the policy alone was protecting the
+// wrong thread. Two changes close that: `worker-src 'self' blob:` plus loading
+// the worker inline (?worker&inline) so it is a blob: worker and DOES inherit
+// this policy, and src/workers/net-lockdown.ts, which deletes the network APIs
+// inside the worker so the guarantee does not rest on CSP inheritance at all
+// (Firefox has historically not inherited it).
 const CSP = [
   "default-src 'self'",
   "script-src 'self' 'wasm-unsafe-eval'",
@@ -10,6 +20,10 @@ const CSP = [
   "img-src 'self' blob: data:",
   "font-src 'self'",
   "connect-src 'none'",
+  // blob: is required for inlined workers (ours, and heic2any's internal one,
+  // which was silently CSP-blocked in production before this was added).
+  "worker-src 'self' blob:",
+  "child-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'none'",

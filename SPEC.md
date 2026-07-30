@@ -108,7 +108,9 @@ Workers (one per heavy domain, WASM lazy-loaded inside)
 ## 7. The privacy proof (this is the product's credibility — build it in, don't bolt it on)
 1. **Strict CSP** via `<meta http-equiv="Content-Security-Policy">` (and headers where possible):
    `default-src 'self'; connect-src 'none'; img-src 'self' blob: data:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'`
-   → `connect-src 'none'` means **the browser itself blocks any upload/fetch**. A bug *cannot* leak a file. This is the killer detail: the guarantee is enforced, not promised.
+   → `connect-src 'none'` means the browser blocks any upload/fetch **from the page**.
+   **Caveat, discovered by testing rather than assumed:** this does *not* cover a worker loaded from a same-origin `https:` URL — such a worker takes its CSP from its own response headers, and GitHub Pages sends none. Since the workers are where file bytes are handled, the policy was protecting the wrong thread. Measured under the production CSP: `fetch()` blocked on the main thread, **allowed** in the worker.
+   → Therefore the guarantee has two parts: workers are loaded **inline (`blob:`)** so they inherit the policy, **and** `net-lockdown.ts` deletes `fetch`/`XHR`/`WebSocket`/`EventSource`/`RTCPeerConnection`/`sendBeacon` inside the worker before anything else runs. The second part depends on no engine behaviour (Firefox has not historically inherited CSP into workers), so the guarantee is enforced, not promised — but by removing the APIs, not by CSP alone.
 2. **"How to verify" panel:** plain-language steps — open DevTools → Network → use the tool → see zero requests. Plus "this whole app is static; read the source on GitHub."
 3. **No analytics, no fonts-from-CDN, no telemetry.** Anything that would need `connect-src` is banned by design.
 4. **After-strip proof:** re-scan cleaned files and show "0 metadata fields remaining" so cleaning is demonstrably real.

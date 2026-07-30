@@ -1,16 +1,19 @@
 // High-quality resampling used when ENLARGING an image.
 //
 // The browser's built-in resize (createImageBitmap resizeQuality:'high') is fast
-// but very soft on upscales. Measured against a ground-truth render — sharp text
-// shrunk to a low-res WebP, then upscaled back — Lanczos3 followed by an unsharp
-// mask scored better on both PSNR and edge contrast:
+// but very soft on upscales. Lanczos3 followed by an unsharp mask scores better
+// on both fidelity and edge contrast.
 //
-//   browser 'high'          PSNR 19.20   edge variance  37
-//   lanczos3                PSNR 19.66   edge variance  62
-//   lanczos3 + unsharp 1.5  PSNR 19.90   edge variance 100
+// The reproducible numbers live in tests/resample.check.mjs (a bars/checker
+// target, run with `npm test`): lanczos beats bilinear on PSNR and edge
+// variance, unsharp raises edge contrast further, and the sharp original still
+// beats every enlargement — that last assertion is the point. Resampling makes
+// edges cleaner; it cannot restore detail the file never contained.
 //
-// (A sharp original scores ~3011, which is the honest ceiling: resampling makes
-// edges cleaner, it cannot restore detail the file never contained.)
+// A separate in-browser run on a small-text target showed the same ordering
+// (browser-resize < lanczos3 < lanczos3+unsharp on both metrics). Those figures
+// are not reproduced here because that harness renders text via canvas and is
+// not part of the committed test suite.
 //
 // Both functions are pure and DOM-free so they can be unit-checked in Node.
 

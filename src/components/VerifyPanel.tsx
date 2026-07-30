@@ -15,8 +15,12 @@ export function VerifyPanel() {
           </li>
         </ol>
         <p>
-          It's not just a promise: this site ships a strict <code>Content-Security-Policy</code> with{' '}
-          <code>connect-src 'none'</code>, so the browser itself <em>blocks</em> any network request.
+          It's not just a promise. This site ships a strict <code>Content-Security-Policy</code> with{' '}
+          <code>connect-src 'none'</code>, which stops the page opening any connection. That policy
+          does not automatically cover Web Workers, which are where your file is actually processed —
+          so the workers are loaded inline (making them inherit it) <em>and</em> the network APIs
+          (<code>fetch</code>, <code>XMLHttpRequest</code>, <code>WebSocket</code>) are deleted inside
+          them at startup. There is no networking function left for the file-handling code to call.
           And it's open source —{' '}
           <a
             href="https://github.com/abidedavana/Scrubly"

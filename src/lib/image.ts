@@ -1,4 +1,10 @@
 import * as Comlink from 'comlink'
+// Inlined as a blob: worker on purpose. A worker loaded from a same-origin
+// https: URL does NOT inherit the document's CSP (it takes the policy from its
+// own response headers, and GitHub Pages sends none), which left the thread
+// that handles every file completely unpoliced. A blob: worker DOES inherit it.
+// See src/workers/net-lockdown.ts for the belt-and-braces half of this.
+import ImageWorker from '../workers/image.worker.ts?worker&inline'
 import type { EncodeOptions, EncodeResult, ImageWorkerApi } from './image-types'
 
 // Single lazily-created worker. The `encodeImage` seam keeps the encoder
@@ -7,10 +13,7 @@ let api: Comlink.Remote<ImageWorkerApi> | null = null
 
 function getApi(): Comlink.Remote<ImageWorkerApi> {
   if (!api) {
-    const worker = new Worker(new URL('../workers/image.worker.ts', import.meta.url), {
-      type: 'module',
-    })
-    api = Comlink.wrap<ImageWorkerApi>(worker)
+    api = Comlink.wrap<ImageWorkerApi>(new ImageWorker())
   }
   return api
 }

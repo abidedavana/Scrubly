@@ -1,3 +1,5 @@
+// MUST be first: strips fetch/XHR/WebSocket/etc before any other code runs.
+import './net-lockdown'
 import * as Comlink from 'comlink'
 import type { EncodeOptions, EncodeResult, ImageWorkerApi } from '../lib/image-types'
 import { flattenToWhiteInPlace, lanczos3Resize, unsharpMaskInPlace } from '../lib/resample'

@@ -37,9 +37,24 @@ it's something you can **verify**.
 2. Use any tool on a file.
 3. See **zero upload requests** — the file never leaves your device.
 
-The site ships a strict `Content-Security-Policy` with `connect-src 'none'`, so the
-browser itself **blocks** any network request. A bug can't leak your file, because the
-code is never allowed to send it anywhere.
+The site ships a strict `Content-Security-Policy` with `connect-src 'none'`, so the page
+cannot open a network connection.
+
+That alone is not enough, and it's worth being precise about why. A Web Worker loaded
+from a normal same-origin URL **does not inherit the page's CSP** — it takes its policy
+from its own HTTP response headers, and static hosts like GitHub Pages send none. Since
+the workers are exactly where your file bytes are processed, the policy was guarding the
+wrong thread. Two things fix it:
+
+1. The file-handling workers are **loaded inline as `blob:` workers**, which *do* inherit
+   the page policy.
+2. `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource`, `RTCPeerConnection` and
+   `sendBeacon` are **deleted inside the worker** before any other code runs
+   ([`net-lockdown.ts`](src/workers/net-lockdown.ts)). This doesn't depend on CSP
+   inheritance — Firefox has historically not implemented it — so the guarantee holds
+   regardless of engine.
+
+There is no networking API left for the code that touches your file to call.
 
 ## Status
 
