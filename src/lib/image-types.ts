@@ -7,8 +7,13 @@ export interface EncodeOptions {
   format: OutputFormat
   /** 0..1 — ignored for PNG (lossless). */
   quality: number
-  /** Longest-edge cap in px. Omit to keep original dimensions. */
+  /** Longest-edge target in px. Omit to keep original dimensions. */
   maxDimension?: number
+  /**
+   * When set, images smaller than maxDimension are enlarged to it (high-quality
+   * resample). Otherwise maxDimension only ever shrinks.
+   */
+  allowUpscale?: boolean
 }
 
 export interface EncodeResult {

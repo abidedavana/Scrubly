@@ -1,4 +1,8 @@
+import { useState } from 'preact/hooks'
 import type { OutputFormat } from '../lib/image-types'
+
+const DIM_MIN = 16
+const DIM_MAX = 16384
 
 interface Props {
   format: OutputFormat
@@ -9,6 +13,8 @@ interface Props {
   onResize: (b: boolean) => void
   maxDim: number
   onMaxDim: (n: number) => void
+  upscale: boolean
+  onUpscale: (b: boolean) => void
 }
 
 export function ConvertOptions({
@@ -20,8 +26,15 @@ export function ConvertOptions({
   onResize,
   maxDim,
   onMaxDim,
+  upscale,
+  onUpscale,
 }: Props) {
   const lossy = format !== 'image/png'
+  // Let the user type freely (a controlled number input that clamps per
+  // keystroke corrupts entries like "500" into "1600"); the committed value is
+  // clamped to [DIM_MIN, DIM_MAX] and the field snaps to it on blur.
+  const [dimText, setDimText] = useState(String(maxDim))
+
   return (
     <div class="options">
       <label class="field">
@@ -61,17 +74,42 @@ export function ConvertOptions({
 
       {resize && (
         <label class="field">
-          <span>Max dimension (px)</span>
+          <span>{upscale ? 'Target size (px)' : 'Max dimension (px)'}</span>
           <input
             type="number"
-            min="16"
-            max="20000"
-            value={maxDim}
-            onInput={(e) =>
-              onMaxDim(Math.max(16, parseInt((e.target as HTMLInputElement).value, 10) || 16))
-            }
+            min={DIM_MIN}
+            max={DIM_MAX}
+            value={dimText}
+            onInput={(e) => {
+              const raw = (e.target as HTMLInputElement).value
+              setDimText(raw)
+              const n = parseInt(raw, 10)
+              if (!Number.isNaN(n)) onMaxDim(Math.min(DIM_MAX, Math.max(DIM_MIN, n)))
+            }}
+            onBlur={() => setDimText(String(maxDim))}
           />
         </label>
+      )}
+
+      {resize && (
+        <label class="field field--check">
+          <input
+            type="checkbox"
+            checked={upscale}
+            aria-describedby="upscale-note"
+            onChange={(e) => onUpscale((e.target as HTMLInputElement).checked)}
+          />
+          <span>Enlarge smaller images to this size</span>
+        </label>
+      )}
+
+      {resize && upscale && (
+        <p class="field-note" id="upscale-note">
+          Enlarging uses a high-quality resample, so zoomed images stay smooth instead of blocky —
+          but it can't add detail the original never captured.
+          {format === 'image/png' &&
+            ' Enlarged photos saved as PNG can get very large — JPEG or WebP is usually a better fit.'}
+        </p>
       )}
     </div>
   )

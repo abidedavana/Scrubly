@@ -19,6 +19,7 @@ export function ImagesTool() {
   const [quality, setQuality] = useState(0.8)
   const [resize, setResize] = useState(false)
   const [maxDim, setMaxDim] = useState(2048)
+  const [upscale, setUpscale] = useState(false)
   const [busy, setBusy] = useState(false)
   const [results, setResults] = useState<ResultItem[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -53,6 +54,7 @@ export function ImagesTool() {
         format,
         quality,
         maxDimension: resize ? maxDim : undefined,
+        allowUpscale: resize && upscale,
       })
       const items: ResultItem[] = out.map((r, i) => ({
         id: `${i}-${r.name}`,
@@ -106,6 +108,8 @@ export function ImagesTool() {
             onResize={setResize}
             maxDim={maxDim}
             onMaxDim={setMaxDim}
+            upscale={upscale}
+            onUpscale={setUpscale}
           />
 
           <div class="run">

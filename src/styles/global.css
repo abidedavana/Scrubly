@@ -348,6 +348,14 @@ main.container {
   accent-color: var(--brand);
 }
 
+.field-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
 /* ---- Run ---- */
 .run {
   margin-top: 16px;

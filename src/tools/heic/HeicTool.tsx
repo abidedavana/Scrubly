@@ -20,6 +20,7 @@ export function HeicTool() {
   const [quality, setQuality] = useState(0.9)
   const [resize, setResize] = useState(false)
   const [maxDim, setMaxDim] = useState(2048)
+  const [upscale, setUpscale] = useState(false)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
   const [results, setResults] = useState<ResultItem[]>([])
@@ -63,6 +64,7 @@ export function HeicTool() {
           format,
           quality,
           maxDimension: resize ? maxDim : undefined,
+          allowUpscale: resize && upscale,
         })
         items.push({
           id: `${i}-${file.name}`,
@@ -120,6 +122,8 @@ export function HeicTool() {
             onResize={setResize}
             maxDim={maxDim}
             onMaxDim={setMaxDim}
+            upscale={upscale}
+            onUpscale={setUpscale}
           />
 
           <div class="run">
